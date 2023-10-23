@@ -3,11 +3,12 @@ from stegano import lsb
 import os
 
 app = Flask(__name__)
-UPLOAD_FOLDER = 'uploads'
-DOWNLOAD_FOLDER = 'downloads'
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['DOWNLOAD_FOLDER'] = 'downloads'
+
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['DOWNLOAD_FOLDER'], exist_ok=True)
 
 def embed_message(input_image_path, text):
     output_image_path = os.path.join(app.config['DOWNLOAD_FOLDER'], 'embedded_image.png')
@@ -16,50 +17,50 @@ def embed_message(input_image_path, text):
     return output_image_path
 
 def extract_message(image_path):
-    extracted_message = lsb.reveal(image_path)
-    return extracted_message
+    try:
+        extracted_message = lsb.reveal(image_path)
+        return extracted_message
+    except IndexError:
+        return ""
 
-@app.route('/', methods=['GET', 'POST'])
-def home():
+@app.route('/')
+def index():
+    return render_template('home.html')
+
+@app.route('/embed', methods=['POST'])
+def embed():
+    embedded_image = None
+
     if request.method == 'POST':
-        uploaded_file = request.files['image']
-        text = request.form['text']
+        uploaded_file = request.files.get('image_file')
+        text = request.form['secret_message']
 
         if uploaded_file:
             filename = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_file.filename)
             uploaded_file.save(filename)
 
             embedded_image = embed_message(filename, text)
-            return render_template('download.html', message="Data embedded successfully!", image=embedded_image)
 
-    return render_template('home.html')
+    if embedded_image:
+        return send_file(embedded_image, as_attachment=True)
+    else:
+        return "Error embedding message"
 
 @app.route('/extract', methods=['POST'])
 def extract():
-    extracted_message = None
-
     if request.method == 'POST':
-        print(request.form)  # This prints the form data
-        uploaded_file = request.files.get('image')
+        uploaded_file = request.files.get('image_file')
 
         if uploaded_file:
             image_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_file.filename)
             uploaded_file.save(image_path)
             extracted_message = extract_message(image_path)
+            print(extract_message)
+  
+    if not extracted_message or not extracted_message.isprintable():
+        return " "
 
-    return render_template('extract.html', extracted_message=extracted_message)
-
-# @app.route('/downloads/embedded_image.png', methods=['GET'])
-# def download():
-#     image_path = 'embedded_image.png'  # Replace with the path to your image file
-#     print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",image_path)
-#     return send_file(image_path, as_attachment=True)
-
-@app.route('/download_embedded_image')
-def download_embedded_image():
-    embedded_image_path = os.path.join(app.config['DOWNLOAD_FOLDER'], 'embedded_image.png')
-    return send_file(embedded_image_path, as_attachment=True)
-
+    return f"{extracted_message}"
 
 if __name__ == '__main__':
     app.run(debug=True)
