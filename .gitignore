@@ -1,3 +1,7 @@
 uploads
 downloads
-bg.mp4
+image
+
+templates/download.html
+templates/extract.html
+extract.py
